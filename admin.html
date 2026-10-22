@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Panel</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #f4f6f9; }
+        .karta { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .hidden { display: none; }
+        input { padding: 6px; width: 80px; text-align: center; }
+        button { background: #4f46e5; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="login-box" class="karta">
+        <h2>Admin Prihlásenie</h2>
+        <input type="password" id="pin" placeholder="PIN (1111)">
+        <button onclick="prihlasit()">Vstúpiť</button>
+        <p id="chyba" style="color: red;"></p>
+    </div>
+
+    <div id="panel" class="karta hidden">
+        <h2>Správa skladu</h2>
+        <div id="zoznam-sklad"></div>
+        <p style="margin-top: 20px;"><a href="/">← Späť do obchodu</a></p>
+    </div>
+
+    <script>
+        async function prihlasit() {
+            let pinVal = document.getElementById("pin").value;
+            let res = await fetch('/.netlify/functions/web/admin-auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin: pinVal })
+            });
+            let data = await res.json();
+            if (data.success) {
+                document.getElementById("login-box").classList.add("hidden");
+                document.getElementById("panel").classList.remove("hidden");
+                nacitajSklad();
+            } else {
+                document.getElementById("chyba").innerText = "Nesprávny PIN!";
+            }
+        }
+
+        async function nacitajSklad() {
+            let res = await fetch('/.netlify/functions/web/stav', { method: 'POST', body: JSON.stringify({}) });
+            let data = await res.json();
+            let html = "";
+            data.produkty.forEach(p => {
+                html += `<div style="margin-bottom: 10px;">${p.nazov} (Sklad: ${p.sklad})</div>`;
+            });
+            document.getElementById("zoznam-sklad").innerHTML = html;
+        }
+    </script>
+</body>
+</html>
