@@ -1,109 +1,167 @@
 <!DOCTYPE html>
 <html lang="sk">
 <head>
-    <meta charset="UTF-8">
-    <title>Môj Webový Obchod</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 30px auto; padding: 20px; background: #f4f6f9; color: #333; }
-        .kontajner { display: flex; gap: 20px; }
-        .karta { background: white; padding: 20px; border-radius: 8px; flex: 1; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .polozka { display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee; align-items: center; }
-        button { background: #0070f3; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        .tlacidla-zlav { display: flex; gap: 10px; margin: 15px 0; }
-        .btn-platba { background: #22c55e; width: 100%; padding: 12px; font-weight: bold; font-size: 16px; border-radius: 6px; color: white; border: none; cursor: pointer; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Môj webový obchod</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; max-width: 1000px; margin: 30px auto; padding: 20px; background: #f4f6f9; color: #333; }
+    h1 { margin-top: 0; }
+    .kontajner { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .karta { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,.1); min-width: 0; }
+    .polozka { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee; align-items: center; }
+    .polozka button, .tlacidla-zlav button { background: #4f46e5; color: white; border: 0; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+    button:disabled { background: #bbb !important; cursor: not-allowed; }
+    .tlacidla-zlav { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; }
+    #btn-kupon { background: #db2777; }
+    .btn-platba { background: #22c55e; width: 100%; padding: 12px; font-weight: bold; font-size: 16px; border-radius: 6px; color: white; border: 0; cursor: pointer; }
+    .muted { color: #666; font-size: .92rem; }
+    .notice { padding: 10px; border-radius: 6px; background: #eef2ff; margin: 12px 0; }
+    @media (max-width: 650px) { .kontajner { grid-template-columns: 1fr; } body { margin: 10px auto; padding: 12px; } }
+  </style>
 </head>
 <body>
-    <h1>=== OBCHOD ===</h1>
-    <div class="kontajner">
-        <div class="karta">
-            <h2>Ponuka produktov</h2>
-            <div id="produkty-box">Načítavam produkty...</div>
-            <p style="margin-top: 20px;"><a href="/admin.html">Prejsť do admin panelu</a></p>
-        </div>
-        <div class="karta">
-            <h2>--- KOŠÍK ---</h2>
-            <ul id="kosik-box"></ul>
-            <hr>
-            <h3>Celková cena: <span id="cena-box">0.00</span> €</h3>
-            <div class="tlacidla-zlav">
-                <button id="btn-clubcard" onclick="uplatnitClubcard()" style="background:#4f46e5;">💳 Clubcard (-10%)</button>
-                <button id="btn-kupon" onclick="uplatnitKupon()" style="background:#db2777;">🎟️ Kupón (-20%)</button>
-            </div>
-            <button class="btn-platba" onclick="zaplatit()">Zaplatiť nákup</button>
-        </div>
-    </div>
+  <h1>=== OBCHOD ===</h1>
+  <p class="muted">Ukážkový obchod – údaje sa ukladajú v tomto prehliadači.</p>
+  <div class="kontajner">
+    <section class="karta">
+      <h2>Ponuka produktov</h2>
+      <div id="produkty-box">Načítavam produkty...</div>
+      <p style="margin-top:20px"><a href="/admin.html">Prejsť do admin panelu</a></p>
+    </section>
+    <section class="karta">
+      <h2>--- KOŠÍK ---</h2>
+      <ul id="kosik-box"></ul>
+      <hr>
+      <p>Medzisúčet: <strong><span id="medzisucet">0.00</span> €</strong></p>
+      <p>Zľava: <strong><span id="zlava">0.00</span> €</strong></p>
+      <h3>Celková cena: <span id="cena-box">0.00</span> €</h3>
+      <div class="tlacidla-zlav">
+        <button id="btn-clubcard" onclick="uplatnitClubcard()">💳 Clubcard (-10%)</button>
+        <button id="btn-kupon" onclick="uplatnitKupon()">🎟️ Kupón (-20%)</button>
+      </div>
+      <button class="btn-platba" onclick="zaplatit()">Zaplatiť nákup</button>
+      <p id="sprava" class="notice" hidden></p>
+    </section>
+  </div>
+<script>
+const STORAGE_KEY = "moj_obchod_v1";
+const DEFAULT_PRODUCTS = [
+  { id: 0, nazov: "Jablko", cena: 0.50, sklad: 10 },
+  { id: 1, nazov: "Banán", cena: 0.45, sklad: 10 },
+  { id: 2, nazov: "Mrkva", cena: 0.30, sklad: 10 },
+  { id: 3, nazov: "Zemiak", cena: 0.25, sklad: 15 },
+  { id: 4, nazov: "Mlieko", cena: 1.20, sklad: 5 }
+];
 
-    <script>
-        const API_URL = '/.netlify/functions/web';
-        let lokalnyStav = { sklad: [10, 10, 10, 15, 5], kosik: [], celkova_cena: 0.0, clubcard_uplatnena: false, kupon_uplatneny: false };
+function nacitajStav() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const state = JSON.parse(saved);
+      if (state && Array.isArray(state.produkty)) return state;
+    }
+  } catch (e) { console.warn("Nepodarilo sa načítať uložený stav.", e); }
+  const state = { produkty: DEFAULT_PRODUCTS.map(p => ({...p})) };
+  ulozStav(state);
+  return state;
+}
+function ulozStav(state) { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function nacitajKosik() {
+  try { return JSON.parse(localStorage.getItem("moj_obchod_kosik_v1") || "[]"); }
+  catch { return []; }
+}
+function ulozKosik() { localStorage.setItem("moj_obchod_kosik_v1", JSON.stringify(kosik)); }
+let stav = nacitajStav();
+let kosik = nacitajKosik();
+let clubcard = sessionStorage.getItem("moj_obchod_clubcard") === "true";
+let kupon = sessionStorage.getItem("moj_obchod_kupon") === "true";
 
-        async function posliPoziadavku(urlSuffix, method = 'POST', data = lokalnyStav) {
-            let options = {
-                method: method,
-                headers: { 'Content-Type': 'application/json' }
-            };
-            if (method === 'POST') {
-                options.body = JSON.stringify(data);
-            }
-            let res = await fetch(`${API_URL}${urlSuffix}`, options);
-            return await res.json();
-        }
+function euro(n) { return Number(n).toFixed(2); }
+function ukazSpravu(text) {
+  const el = document.getElementById("sprava");
+  el.textContent = text; el.hidden = false;
+}
+function vykresli() {
+  const box = document.getElementById("produkty-box");
+  box.innerHTML = "";
+  stav.produkty.forEach(p => {
+    const row = document.createElement("div");
+    row.className = "polozka";
+    const info = document.createElement("div");
+    const strong = document.createElement("strong");
+    strong.textContent = p.nazov.toUpperCase();
+    info.append(strong, document.createTextNode(` – ${euro(p.cena)} € (Sklad: ${p.sklad})`));
+    const btn = document.createElement("button");
+    btn.textContent = p.sklad <= 0 ? "Vypredané" : "Kúpiť";
+    btn.disabled = p.sklad <= 0;
+    btn.addEventListener("click", () => kupit(p.id));
+    row.append(info, btn); box.append(row);
+  });
 
-        async function inicializuj() {
-            try {
-                let data = await posliPoziadavku('/stav', 'GET');
-                vykresliData(data);
-            } catch (err) {
-                console.error("Chyba pri načítavaní stavu:", err);
-            }
-        }
-
-        function vykresliData(data) {
-            if (!data || !data.produkty) return;
-            lokalnyStav = data;
-            let prodHtml = "";
-            data.produkty.forEach(p => {
-                let jeVypredane = p.sklad === 0;
-                prodHtml += `
-                    <div class="polozka">
-                        <div><strong>${p.nazov.toUpperCase()}</strong> - ${p.cena.toFixed(2)} € (Sklad: ${p.sklad})</div>
-                        <button onclick="kupit(${p.id})" ${jeVypredane ? 'disabled' : ''}>${jeVypredane ? 'Vypredané' : 'Kúpiť'}</button>
-                    </div>`;
-            });
-            document.getElementById('produkty-box').innerHTML = prodHtml;
-
-            let kosikHtml = data.kosik.length === 0 ? "<li>Košík je prázdny</li>" : "";
-            data.kosik.forEach(p => { kosikHtml += `<li>- ${p}</li>`; });
-            document.getElementById('kosik-box').innerHTML = kosikHtml;
-            document.getElementById('cena-box').innerText = data.celkova_cena.toFixed(2);
-            document.getElementById('btn-clubcard').disabled = data.clubcard_uplatnena;
-            document.getElementById('btn-kupon').disabled = data.kupon_uplatneny;
-        }
-
-        async function kupit(id) {
-            let data = await posliPoziadavku(`/kupit/${id}`);
-            if(!data.error) vykresliData(data);
-        }
-
-        async function uplatnitClubcard() {
-            let data = await posliPoziadavku('/clubcard');
-            vykresliData(data);
-        }
-
-        async function uplatnitKupon() {
-            let data = await posliPoziadavku('/kupon');
-            vykresliData(data);
-        }
-
-        async function zaplatit() {
-            let data = await posliPoziadavku('/zaplatit');
-            alert("Nákup bol úspešne dokončený!");
-            vykresliData(data);
-        }
-
-        inicializuj();
-    </script>
+  const list = document.getElementById("kosik-box");
+  list.innerHTML = "";
+  if (!kosik.length) {
+    const li = document.createElement("li"); li.textContent = "Košík je prázdny"; list.append(li);
+  } else {
+    kosik.forEach((id, index) => {
+      const p = stav.produkty.find(x => x.id === id);
+      if (!p) return;
+      const li = document.createElement("li");
+      li.append(document.createTextNode(`${p.nazov} – ${euro(p.cena)} € `));
+      const remove = document.createElement("button");
+      remove.textContent = "Odstrániť"; remove.style.marginLeft = "8px";
+      remove.addEventListener("click", () => odstranZKosika(index));
+      li.append(remove); list.append(li);
+    });
+  }
+  const subtotal = kosik.reduce((sum, id) => {
+    const p = stav.produkty.find(x => x.id === id); return sum + (p ? p.cena : 0);
+  }, 0);
+  let total = subtotal;
+  if (clubcard) total *= 0.9;
+  if (kupon) total *= 0.8;
+  document.getElementById("medzisucet").textContent = euro(subtotal);
+  document.getElementById("cena-box").textContent = euro(total);
+  document.getElementById("zlava").textContent = euro(subtotal - total);
+  document.getElementById("btn-clubcard").disabled = clubcard || subtotal <= 0;
+  document.getElementById("btn-kupon").disabled = kupon || subtotal <= 0;
+}
+function kupit(id) {
+  const p = stav.produkty.find(x => x.id === id);
+  if (!p || p.sklad < 1) return;
+  p.sklad--; kosik.push(id);
+  ulozStav(stav); ulozKosik(); vykresli();
+}
+function odstranZKosika(index) {
+  const id = kosik[index];
+  if (id === undefined) return;
+  kosik.splice(index, 1);
+  const p = stav.produkty.find(x => x.id === id);
+  if (p) p.sklad++;
+  ulozStav(stav); ulozKosik(); vykresli();
+}
+function uplatnitClubcard() {
+  if (!kosik.length) return ukazSpravu("Najprv pridaj produkt do košíka.");
+  clubcard = true; sessionStorage.setItem("moj_obchod_clubcard", "true"); vykresli();
+}
+function uplatnitKupon() {
+  if (!kosik.length) return ukazSpravu("Najprv pridaj produkt do košíka.");
+  kupon = true; sessionStorage.setItem("moj_obchod_kupon", "true"); vykresli();
+}
+function zaplatit() {
+  if (!kosik.length) return ukazSpravu("Košík je prázdny.");
+  const total = Number(document.getElementById("cena-box").textContent);
+  alert(`Nákup bol dokončený. Suma: ${euro(total)} €\nToto je iba ukážková platba – žiadne peniaze sa nestrhávajú.`);
+  kosik = []; clubcard = false; kupon = false;
+  ulozKosik();
+  sessionStorage.removeItem("moj_obchod_clubcard");
+  sessionStorage.removeItem("moj_obchod_kupon");
+  document.getElementById("sprava").hidden = true;
+  vykresli();
+}
+vykresli();
+</script>
 </body>
 </html>
