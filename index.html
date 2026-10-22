@@ -36,24 +36,32 @@
     </div>
 
     <script>
-        const API_URL = '/.netlify/functions/web';
+        const API_URL = '/api';
         let lokalnyStav = { sklad: [5, 3, 4, 6, 2], kosik: [], celkova_cena: 0.0, clubcard_uplatnena: false, kupon_uplatneny: false };
 
-        async function posliPoziadavku(urlSuffix) {
-            let res = await fetch(`${API_URL}${urlSuffix}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(lokalnyStav)
-            });
+        async function posliPoziadavku(urlSuffix, method = 'POST', data = lokalnyStav) {
+            let options = {
+                method: method,
+                headers: { 'Content-Type': 'application/json' }
+            };
+            if (method === 'POST') {
+                options.body = JSON.stringify(data);
+            }
+            let res = await fetch(`${API_URL}${urlSuffix}`, options);
             return await res.json();
         }
 
         async function inicializuj() {
-            let data = await posliPoziadavku('/stav');
-            vykresliData(data);
+            try {
+                let data = await posliPoziadavku('/stav', 'GET');
+                vykresliData(data);
+            } catch (err) {
+                console.error("Chyba pri načítavaní stavu:", err);
+            }
         }
 
         function vykresliData(data) {
+            if (!data || !data.produkty) return;
             lokalnyStav = data;
             let prodHtml = "";
             data.produkty.forEach(p => {
