@@ -1,96 +1,126 @@
 import json
+import sqlite3
+import html
 
-ZAKLADNE_PRODUKTY = [
-    {"id": 0, "nazov": "jablko", "cena": 0.50, "druh": "ovocie"},
-    {"id": 1, "nazov": "banan", "cena": 0.45, "druh": "ovocie"},
-    {"id": 2, "nazov": "mrkva", "cena": 0.30, "druh": "zelenina"},
-    {"id": 3, "nazov": "zemiak", "cena": 0.25, "druh": "zelenina"},
-    {"id": 4, "nazov": "mlieko", "cena": 1.20, "druh": "mliečne"}
-]
+DB_PATH = '/tmp/obchod.db'
 
-ADMIN_PIN = "1111"
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS store_state (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            data TEXT
+        )
+    ''')
+    
+    default_state = {
+        "produkty": [
+            {"id": 0, "nazov": "jablko", "cena": 0.50, "sklad": 10},
+            {"id": 1, "nazov": "banán", "cena": 0.45, "sklad": 10},
+            {"id": 2, "nazov": "mrkva", "cena": 0.30, "sklad": 10},
+            {"id": 3, "nazov": "zemiak", "cena": 0.25, "sklad": 15},
+            {"id": 4, "nazov": "mlieko", "cena": 1.20, "sklad": 5}
+        ],
+        "kosik": [],
+        "celkova_cena": 0.0,
+        "clubcard_uplatnena": False,
+        "kupon_uplatneny": False
+    }
+    
+    cursor.execute('SELECT data FROM store_state WHERE id = 1')
+    row = cursor.fetchone()
+    if not row:
+        cursor.execute('INSERT INTO store_state (id, data) VALUES (1, ?)', (json.dumps(default_state),))
+        conn.commit()
+    conn.close()
+
+init_db()
+
+def get_state():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT data FROM store_state WHERE id = 1')
+    row = cursor.fetchone()
+    conn.close()
+    return json.loads(row[0]) if row else {}
+
+def save_state(state):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE store_state SET data = ? WHERE id = 1', (json.dumps(state),))
+    conn.commit()
+    conn.close()
 
 def handler(event, context):
     path = event.get("path", "")
-    api_path = path.replace("/.netlify/functions/web", "")
-    if not api_path:
-        api_path = "/"
+    method = event.get("httpMethod", "GET")
+    
+    for prefix in ["/.netlify/functions/web", "/api"]:
+        if path.startswith(prefix):
+            path = path[len(prefix):]
+            
+    if not path:
+        path = "/"
 
-    try:
-        req_data = json.loads(event.get("body", "{}")) if event.get("body") else {}
-    except:
-        req_data = {}
+    state = get_state()
 
-    sklad = req_data.get("sklad", [5, 3, 4, 6, 2])
-    kosik = req_data.get("kosik", [])
-    celkova_cena = req_data.get("celkova_cena", 0.0)
-    clubcard_uplatnena = req_data.get("clubcard_uplatnena", False)
-    kupon_uplatneny = req_data.get("kupon_uplatneny", False)
-
-    # 1. Admin login
-    if api_path == "/admin-auth":
-        pin = req_data.get("pin", "")
-        success = (pin == ADMIN_PIN)
-        return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"success": success})}
-
-    # 2. Stav obchodu
-    if api_path == "/stav" or api_path == "/":
-        produkty_so_skladom = [{**p, "sklad": sklad[p["id"]]} for p in ZAKLADNE_PRODUKTY]
-        res_body = {
-            "produkty": produkty_so_skladom, "kosik": kosik, 
-            "celkova_cena": round(celkova_cena, 2), "sklad": sklad,
-            "clubcard_uplatnena": clubcard_uplatnena, "kupon_uplatneny": kupon_uplatneny
+    if method == "GET" and (path == "/stav" or path == "/"):
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(state)
         }
-        return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(res_body)}
 
-    # 3. Kúpiť produkt
-    elif "/kupit/" in api_path:
+    if method == "POST":
         try:
-            pozicia = int(api_path.split("/")[-1])
-            if sklad[pozicia] > 0:
-                kosik.append(ZAKLADNE_PRODUKTY[pozicia]["nazov"])
-                celkova_cena += ZAKLADNE_PRODUKTY[pozicia]["cena"]
-                sklad[pozicia] -= 1
+            body = json.loads(event.get("body", "{}"))
+            if "produkty" in body:
+                state = body
         except:
             pass
-        produkty_so_skladom = [{**p, "sklad": sklad[p["id"]]} for p in ZAKLADNE_PRODUKTY]
-        res_body = {
-            "produkty": produkty_so_skladom, "kosik": kosik, "celkova_cena": round(celkova_cena, 2),
-            "sklad": sklad, "clubcard_uplatnena": clubcard_uplatnena, "kupon_uplatneny": kupon_uplatneny
-        }
-        return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(res_body)}
 
-    # 4. Clubcard zľava
-    elif api_path == "/clubcard":
-        if not clubcard_uplatnena:
-            celkova_cena *= 0.9
-            clubcard_uplatnena = True
-        produkty_so_skladom = [{**p, "sklad": sklad[p["id"]]} for p in ZAKLADNE_PRODUKTY]
-        res_body = {
-            "produkty": produkty_so_skladom, "kosik": kosik, "celkova_cena": round(celkova_cena, 2),
-            "sklad": sklad, "clubcard_uplatnena": clubcard_uplatnena, "kupon_uplatneny": kupon_uplatneny
-        }
-        return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(res_body)}
+        if path == "/stav":
+            save_state(state)
+            return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(state)}
 
-    # 5. Kupón zľava
-    elif api_path == "/kupon":
-        if not kupon_uplatneny:
-            celkova_cena *= 0.8
-            kupon_uplatneny = True
-        produkty_so_skladom = [{**p, "sklad": sklad[p["id"]]} for p in ZAKLADNE_PRODUKTY]
-        res_body = {
-            "produkty": produkty_so_skladom, "kosik": kosik, "celkova_cena": round(celkova_cena, 2),
-            "sklad": sklad, "clubcard_uplatnena": clubcard_uplatnena, "kupon_uplatneny": kupon_uplatneny
-        }
-        return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(res_body)}
+        elif path.startswith("/kupit/"):
+            try:
+                prod_id = int(path.split("/")[-1])
+                for p in state.get("produkty", []):
+                    if p["id"] == prod_id and p["sklad"] > 0:
+                        p["sklad"] -= 1
+                        state["kosik"].append(p["nazov"])
+                        state["celkova_cena"] += p["cena"]
+                save_state(state)
+            except Exception as e:
+                pass
+            return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(state)}
 
-    # 6. Zaplatiť / Reset košíka
-    elif api_path == "/zaplatit":
-        produkty_so_skladom = [{**p, "sklad": sklad[p["id"]]} for p in ZAKLADNE_PRODUKTY]
-        res_body = {
-            "produkty": produkty_so_skladom, "kosik": [], "celkova_cena": 0.0,
-            "sklad": sklad, "clubcard_uplatnena": False, "kupon_uplatneny": False
-        }
-        return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(res_body)}
+        elif path == "/clubcard":
+            if not state.get("clubcard_uplatnena", False) and state.get("celkova_cena", 0) > 0:
+                state["celkova_cena"] *= 0.9
+                state["clubcard_uplatnena"] = True
+                save_state(state)
+            return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(state)}
 
-    return {"statusCode": 404, "body": "Not Found"}
+        elif path == "/kupon":
+            if not state.get("kupon_uplatneny", False) and state.get("celkova_cena", 0) > 0:
+                state["celkova_cena"] *= 0.8
+                state["kupon_uplatneny"] = True
+                save_state(state)
+            return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(state)}
+
+        elif path == "/zaplatit":
+            state["kosik"] = []
+            state["celkova_cena"] = 0.0
+            state["clubcard_uplatnena"] = False
+            state["kupon_uplatneny"] = False
+            save_state(state)
+            return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(state)}
+
+    return {
+        "statusCode": 404,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps({"error": f"Neznáma cesta: {path}"})
+    }
