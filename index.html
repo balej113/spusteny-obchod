@@ -36,8 +36,8 @@
     </div>
 
     <script>
-        const API_URL = '/api';
-        let lokalnyStav = { sklad: [5, 3, 4, 6, 2], kosik: [], celkova_cena: 0.0, clubcard_uplatnena: false, kupon_uplatneny: false };
+        const API_URL = '/.netlify/functions/web';
+        let lokalnyStav = { sklad: [10, 10, 10, 15, 5], kosik: [], celkova_cena: 0.0, clubcard_uplatnena: false, kupon_uplatneny: false };
 
         async function posliPoziadavku(urlSuffix, method = 'POST', data = lokalnyStav) {
             let options = {
