@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <title>Môj Webový Obchod</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 30px auto; padding: 20px; background: #f4f6f9; color: #333; }
+        .kontajner { display: flex; gap: 20px; }
+        .karta { background: white; padding: 20px; border-radius: 8px; flex: 1; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .polozka { display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee; align-items: center; }
+        button { background: #0070f3; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .tlacidla-zlav { display: flex; gap: 10px; margin: 15px 0; }
+        .btn-platba { background: #22c55e; width: 100%; padding: 12px; font-weight: bold; font-size: 16px; border-radius: 6px; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>=== OBCHOD ===</h1>
+    <div class="kontajner">
+        <div class="karta">
+            <h2>Ponuka produktov</h2>
+            <div id="produkty-box">Načítavam produkty...</div>
+            <p style="margin-top: 20px;"><a href="/admin.html">Prejsť do admin panelu</a></p>
+        </div>
+        <div class="karta">
+            <h2>--- KOŠÍK ---</h2>
+            <ul id="kosik-box"></ul>
+            <hr>
+            <h3>Celková cena: <span id="cena-box">0.00</span> €</h3>
+            <div class="tlacidla-zlav">
+                <button id="btn-clubcard" onclick="uplatnitClubcard()" style="background:#4f46e5;">💳 Clubcard (-10%)</button>
+                <button id="btn-kupon" onclick="uplatnitKupon()" style="background:#db2777;">🎟️ Kupón (-20%)</button>
+            </div>
+            <button class="btn-platba" onclick="zaplatit()">Zaplatiť nákup</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/.netlify/functions/web';
+        let lokalnyStav = { sklad: [5, 3, 4, 6, 2], kosik: [], celkova_cena: 0.0, clubcard_uplatnena: false, kupon_uplatneny: false };
+
+        async function posliPoziadavku(urlSuffix) {
+            let res = await fetch(`${API_URL}${urlSuffix}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(lokalnyStav)
+            });
+            return await res.json();
+        }
+
+        async function inicializuj() {
+            let data = await posliPoziadavku('/stav');
+            vykresliData(data);
+        }
+
+        function vykresliData(data) {
+            lokalnyStav = data;
+            let prodHtml = "";
+            data.produkty.forEach(p => {
+                let jeVypredane = p.sklad === 0;
+                prodHtml += `
+                    <div class="polozka">
+                        <div><strong>${p.nazov.toUpperCase()}</strong> - ${p.cena.toFixed(2)} € (Sklad: ${p.sklad})</div>
+                        <button onclick="kupit(${p.id})" ${jeVypredane ? 'disabled' : ''}>${jeVypredane ? 'Vypredané' : 'Kúpiť'}</button>
+                    </div>`;
+            });
+            document.getElementById('produkty-box').innerHTML = prodHtml;
+
+            let kosikHtml = data.kosik.length === 0 ? "<li>Košík je prázdny</li>" : "";
+            data.kosik.forEach(p => { kosikHtml += `<li>- ${p}</li>`; });
+            document.getElementById('kosik-box').innerHTML = kosikHtml;
+            document.getElementById('cena-box').innerText = data.celkova_cena.toFixed(2);
+            document.getElementById('btn-clubcard').disabled = data.clubcard_uplatnena;
+            document.getElementById('btn-kupon').disabled = data.kupon_uplatneny;
+        }
+
+        async function kupit(id) {
+            let data = await posliPoziadavku(`/kupit/${id}`);
+            if(!data.error) vykresliData(data);
+        }
+
+        async function uplatnitClubcard() {
+            let data = await posliPoziadavku('/clubcard');
+            vykresliData(data);
+        }
+
+        async function uplatnitKupon() {
+            let data = await posliPoziadavku('/kupon');
+            vykresliData(data);
+        }
+
+        async function zaplatit() {
+            let data = await posliPoziadavku('/zaplatit');
+            alert("Nákup bol úspešne dokončený!");
+            vykresliData(data);
+        }
+
+        inicializuj();
+    </script>
+</body>
+</html>
