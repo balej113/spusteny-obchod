@@ -1,57 +1,107 @@
 <!DOCTYPE html>
 <html lang="sk">
 <head>
-    <meta charset="UTF-8">
-    <title>Admin Panel</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #f4f6f9; }
-        .karta { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .hidden { display: none; }
-        input { padding: 6px; width: 80px; text-align: center; }
-        button { background: #4f46e5; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin panel – obchod</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; max-width: 700px; margin: 35px auto; padding: 18px; background: #f4f6f9; color: #333; }
+    .karta { background: white; padding: 22px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,.1); }
+    input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    button { background: #4f46e5; color: white; border: 0; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+    .hidden { display: none; }
+    .riadok { display: flex; gap: 12px; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 12px 0; }
+    .riadok input { width: 90px; }
+    .chyba { color: #b91c1c; }
+    @media(max-width: 500px) { .riadok { align-items: flex-start; flex-direction: column; } }
+  </style>
 </head>
 <body>
-    <div id="login-box" class="karta">
-        <h2>Admin Prihlásenie</h2>
-        <input type="password" id="pin" placeholder="PIN (1111)">
-        <button onclick="prihlasit()">Vstúpiť</button>
-        <p id="chyba" style="color: red;"></p>
-    </div>
+  <section id="login-box" class="karta">
+    <h1>Admin prihlásenie</h1>
+    <p>Ukážkový PIN: <strong>1111</strong></p>
+    <form id="login-form">
+      <input type="password" id="pin" placeholder="Zadaj PIN" inputmode="numeric" required>
+      <button type="submit">Vstúpiť</button>
+    </form>
+    <p id="chyba" class="chyba"></p>
+    <p><a href="/">← Späť do obchodu</a></p>
+  </section>
 
-    <div id="panel" class="karta hidden">
-        <h2>Správa skladu</h2>
-        <div id="zoznam-sklad"></div>
-        <p style="margin-top: 20px;"><a href="/">← Späť do obchodu</a></p>
-    </div>
-
-    <script>
-        async function prihlasit() {
-            let pinVal = document.getElementById("pin").value;
-            let res = await fetch('/.netlify/functions/web/admin-auth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pin: pinVal })
-            });
-            let data = await res.json();
-            if (data.success) {
-                document.getElementById("login-box").classList.add("hidden");
-                document.getElementById("panel").classList.remove("hidden");
-                nacitajSklad();
-            } else {
-                document.getElementById("chyba").innerText = "Nesprávny PIN!";
-            }
-        }
-
-        async function nacitajSklad() {
-            let res = await fetch('/.netlify/functions/web/stav', { method: 'POST', body: JSON.stringify({}) });
-            let data = await res.json();
-            let html = "";
-            data.produkty.forEach(p => {
-                html += `<div style="margin-bottom: 10px;">${p.nazov} (Sklad: ${p.sklad})</div>`;
-            });
-            document.getElementById("zoznam-sklad").innerHTML = html;
-        }
-    </script>
+  <section id="panel" class="karta hidden">
+    <h1>Správa skladu</h1>
+    <p>Tu môžeš dopĺňať počet kusov jednotlivých produktov.</p>
+    <div id="zoznam-sklad"></div>
+    <p><button id="odhlasit">Odhlásiť sa</button> <a href="/" style="margin-left:12px">Späť do obchodu</a></p>
+    <p class="muted">Zmeny sa ukladajú v tomto prehliadači.</p>
+  </section>
+<script>
+const STORAGE_KEY = "moj_obchod_v1";
+const DEFAULT_PRODUCTS = [
+  { id: 0, nazov: "Jablko", cena: 0.50, sklad: 10 },
+  { id: 1, nazov: "Banán", cena: 0.45, sklad: 10 },
+  { id: 2, nazov: "Mrkva", cena: 0.30, sklad: 10 },
+  { id: 3, nazov: "Zemiak", cena: 0.25, sklad: 15 },
+  { id: 4, nazov: "Mlieko", cena: 1.20, sklad: 5 }
+];
+function loadState() {
+  try {
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    if (data && Array.isArray(data.produkty)) return data;
+  } catch {}
+  const data = { produkty: DEFAULT_PRODUCTS.map(p => ({...p})) };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  return data;
+}
+function saveState(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+function vykresliSklad() {
+  const state = loadState();
+  const box = document.getElementById("zoznam-sklad");
+  box.innerHTML = "";
+  state.produkty.forEach(p => {
+    const row = document.createElement("div"); row.className = "riadok";
+    const label = document.createElement("div");
+    label.textContent = `${p.nazov} – ${p.cena.toFixed(2)} € | Sklad: ${p.sklad} ks`;
+    const form = document.createElement("form");
+    const input = document.createElement("input");
+    input.type = "number"; input.min = "1"; input.max = "10000"; input.value = "5"; input.required = true;
+    input.setAttribute("aria-label", `Počet kusov pre ${p.nazov}`);
+    const button = document.createElement("button"); button.type = "submit"; button.textContent = "Doplniť sklad";
+    form.append(input, button);
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      const amount = Number(input.value);
+      if (!Number.isInteger(amount) || amount < 1 || amount > 10000) return alert("Zadaj celé číslo od 1 do 10000.");
+      const latest = loadState();
+      const product = latest.produkty.find(x => x.id === p.id);
+      if (product) { product.sklad += amount; saveState(latest); vykresliSklad(); }
+    });
+    row.append(label, form); box.append(row);
+  });
+}
+document.getElementById("login-form").addEventListener("submit", e => {
+  e.preventDefault();
+  if (document.getElementById("pin").value === "1111") {
+    sessionStorage.setItem("moj_obchod_admin", "true");
+    document.getElementById("login-box").classList.add("hidden");
+    document.getElementById("panel").classList.remove("hidden");
+    vykresliSklad();
+  } else {
+    document.getElementById("chyba").textContent = "Nesprávny PIN.";
+  }
+});
+document.getElementById("odhlasit").addEventListener("click", () => {
+  sessionStorage.removeItem("moj_obchod_admin");
+  document.getElementById("panel").classList.add("hidden");
+  document.getElementById("login-box").classList.remove("hidden");
+  document.getElementById("pin").value = "";
+});
+if (sessionStorage.getItem("moj_obchod_admin") === "true") {
+  document.getElementById("login-box").classList.add("hidden");
+  document.getElementById("panel").classList.remove("hidden");
+  vykresliSklad();
+}
+</script>
 </body>
 </html>
